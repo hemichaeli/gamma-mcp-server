@@ -95,9 +95,17 @@ export type ImageSource =
   | "pictographic"
   | "giphy"
   | "pexels"
+  | "unsplash"
   | "placeholder"
   | "noImages"
   | "themeAccent";
+export type StylePreset =
+  | "photorealistic"
+  | "illustration"
+  | "abstract"
+  | "3D"
+  | "lineArt"
+  | "custom";
 export type CardDimensions =
   | "fluid"
   | "16x9"
@@ -110,6 +118,29 @@ export type CardDimensions =
   | "9x16";
 export type ExportFormat = "pptx" | "pdf" | "png";
 export type GenerationStatus = "pending" | "completed" | "failed";
+
+export type HeaderFooterSlotType = "cardNumber" | "image" | "text";
+export type HeaderFooterImageSource = "themeLogo" | "custom";
+export type HeaderFooterSlotSize = "sm" | "md" | "lg" | "xl";
+
+export interface HeaderFooterSlot {
+  type: HeaderFooterSlotType;
+  source?: HeaderFooterImageSource;
+  src?: string;
+  value?: string;
+  size?: HeaderFooterSlotSize;
+}
+
+export interface HeaderFooterConfig {
+  topLeft?: HeaderFooterSlot;
+  topCenter?: HeaderFooterSlot;
+  topRight?: HeaderFooterSlot;
+  bottomLeft?: HeaderFooterSlot;
+  bottomCenter?: HeaderFooterSlot;
+  bottomRight?: HeaderFooterSlot;
+  hideFromFirstCard?: boolean;
+  hideFromLastCard?: boolean;
+}
 
 export interface CreateGenerationBody {
   inputText: string;
@@ -129,10 +160,11 @@ export interface CreateGenerationBody {
     model?: string;
     style?: string;
     source?: ImageSource;
+    stylePreset?: StylePreset;
   };
   cardOptions?: {
     dimensions?: CardDimensions;
-    headerFooter?: Record<string, unknown>;
+    headerFooter?: HeaderFooterConfig;
   };
   sharingOptions?: {
     workspaceAccess?: "edit" | "comment" | "view" | "noAccess" | "fullAccess";
