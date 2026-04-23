@@ -42,10 +42,18 @@ const ImageSourceSchema = z.enum([
   "pictographic",
   "giphy",
   "pexels",
+  "unsplash",
   "placeholder",
   "noImages",
   "themeAccent",
 ]);
+
+const StylePresetSchema = z
+  .enum(["photorealistic", "illustration", "abstract", "3D", "lineArt", "custom"])
+  .describe(
+    "Quick style preset for AI-generated images. Added Feb 2026. " +
+      "When set to `custom`, provide freeform style via imageOptions.style."
+  );
 
 const CardDimensionsSchema = z.enum([
   "fluid",
@@ -112,24 +120,86 @@ const ImageOptionsSchema = z
       .string()
       .optional()
       .describe(
-        "AI image model id. Examples: imagen-4-pro, flux-1-pro, gpt-image-1-high, gemini-3-pro-image. " +
+        "AI image model id. Recent examples (Feb 2026): " +
+          "`gemini-3-pro-image`, `gemini-3-pro-image-hd`, `gemini-3.1-flash-image`, `gemini-3.1-flash-image-hd`, " +
+          "`flux-2-pro`, `flux-2-max`, `flux-kontext-pro`, `imagen-4-pro`, `imagen-4-ultra`, " +
+          "`recraft-v4-pro`, `gpt-image-1-high`, `ideogram-v3-quality`. " +
+          "Full list at https://developers.gamma.app/reference/image-model-accepted-values. " +
           "Availability depends on plan."
       ),
-    style: z.string().max(500).optional(),
-    source: ImageSourceSchema.optional(),
+    style: z
+      .string()
+      .max(500)
+      .optional()
+      .describe(
+        "Freeform style guidance for the image generator. " +
+          "Use with stylePreset=custom, or alongside any preset for extra nuance."
+      ),
+    source: ImageSourceSchema.optional().describe(
+      "Where images come from. `aiGenerated` uses the chosen model; " +
+        "`webFreeToUseCommercially` is safest for client deliverables; `noImages` disables visuals."
+    ),
+    stylePreset: StylePresetSchema.optional(),
   })
   .optional();
+
+// Header/footer slot configuration (6 positions + 2 visibility flags)
+
+const HeaderFooterSlotSchema = z
+  .object({
+    type: z
+      .enum(["cardNumber", "image", "text"])
+      .describe("What this slot contains. `cardNumber` auto-numbers each card."),
+    source: z
+      .enum(["themeLogo", "custom"])
+      .optional()
+      .describe(
+        "For image slots: `themeLogo` uses the current theme's logo; `custom` uses the provided src URL."
+      ),
+    src: z
+      .string()
+      .url()
+      .optional()
+      .describe("For image slots with source=custom: the image URL."),
+    value: z
+      .string()
+      .optional()
+      .describe('For text slots: the string to display, e.g. "Confidential" or "Bold Productions".'),
+    size: z
+      .enum(["sm", "md", "lg", "xl"])
+      .optional()
+      .describe("Visual size of the slot content. Default md."),
+  })
+  .describe(
+    "One of the six header/footer positions (topLeft, topCenter, topRight, bottomLeft, bottomCenter, bottomRight)."
+  );
+
+const HeaderFooterSchema = z
+  .object({
+    topLeft: HeaderFooterSlotSchema.optional(),
+    topCenter: HeaderFooterSlotSchema.optional(),
+    topRight: HeaderFooterSlotSchema.optional(),
+    bottomLeft: HeaderFooterSlotSchema.optional(),
+    bottomCenter: HeaderFooterSlotSchema.optional(),
+    bottomRight: HeaderFooterSlotSchema.optional(),
+    hideFromFirstCard: z
+      .boolean()
+      .optional()
+      .describe("Hide header/footer from slide 1 (often a cover slide)."),
+    hideFromLastCard: z
+      .boolean()
+      .optional()
+      .describe("Hide header/footer from the last slide."),
+  })
+  .describe(
+    "Per-card header/footer configuration. 6 slot positions, each independent. " +
+      "See https://developers.gamma.app/guides/header-and-footer-formatting for design guidance."
+  );
 
 const CardOptionsSchema = z
   .object({
     dimensions: CardDimensionsSchema.optional(),
-    headerFooter: z
-      .record(z.any())
-      .optional()
-      .describe(
-        "Header/footer config with slots topLeft/topCenter/topRight/bottomLeft/bottomCenter/bottomRight. " +
-          "Each slot holds an object with `type` (cardNumber|image|text), plus `value`, `src`, `source`, `size`."
-      ),
+    headerFooter: HeaderFooterSchema.optional(),
   })
   .optional();
 
@@ -177,7 +247,7 @@ export function createMcpServer(): McpServer {
   const server = new McpServer(
     {
       name: "gamma-mcp-server",
-      version: "1.0.0",
+      version: "1.1.0",
     },
     {
       capabilities: { tools: {} },
@@ -238,7 +308,8 @@ export function createMcpServer(): McpServer {
           .optional()
           .describe("Folder ids from `gamma_list_folders` to store the output."),
         exportAs: ExportFormatSchema.optional().describe(
-          "Auto-export the result. Only one format per request. Export URLs expire in ~1 week."
+          "Auto-export the result. One format per call (pptx OR pdf OR png). " +
+            "Export URLs expire in ~1 week. For both PPTX and PDF, call twice (consumes credits twice)."
         ),
         wait: z
           .boolean()
@@ -325,7 +396,8 @@ export function createMcpServer(): McpServer {
       description:
         "Generate a Gamma using an existing single-page template with variable substitution. " +
         "Use this when you want a fixed layout and only the content changes (e.g. repeated sales briefs, weekly reports). " +
-        "The template must already exist in your workspace and have exactly one Page.",
+        "The template must already exist in your workspace and have exactly one Page. " +
+        "Note: imageOptions is a restricted subset (only model + style, no source, no stylePreset).",
       inputSchema: {
         prompt: z
           .string()
@@ -341,7 +413,12 @@ export function createMcpServer(): McpServer {
         themeId: z.string().optional(),
         imageOptions: z
           .object({
-            model: z.string().optional(),
+            model: z
+              .string()
+              .optional()
+              .describe(
+                "AI image model id. See https://developers.gamma.app/reference/image-model-accepted-values for the full list."
+              ),
             style: z.string().max(500).optional(),
           })
           .optional(),
